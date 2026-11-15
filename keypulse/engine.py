@@ -3,6 +3,8 @@ import logging
 import threading
 import time
 
+import numpy as np
+
 from .audio.features import Features
 from .audio.loopback import Loopback
 from .effects import EFFECTS
@@ -117,11 +119,13 @@ class Engine:
                     pressed = []
 
                 colors = effect.render(RenderContext(dt=dt, now=time.time(), audio=audio, keys=pressed), s)
-                b = self.settings.app["brightness"] / 100.0
-                if b < 0.999:
-                    colors = [scale(c, b) for c in colors]
-                client.set_colors(kb, colors)
-                self.last_colors = colors
+                self.last_colors = colors          # the preview shows these (monitors already apply gamma)
+                arr = np.clip(np.asarray(colors, dtype=np.float32), 0, 255) / 255.0
+                gamma = effect.output_gamma(s)
+                if gamma != 1.0:
+                    arr = arr ** gamma             # LED perceptual correction: real darks, punchy peaks
+                arr *= self.settings.app["brightness"] / 100.0 * 255.0
+                client.set_colors(kb, arr.tolist())
 
                 frames += 1
                 if now - fps_t >= 1.0:

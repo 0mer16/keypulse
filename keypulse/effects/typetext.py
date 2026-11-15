@@ -75,6 +75,7 @@ class TypeTextEffect(Effect):
                                "edge_mode": "match", "idle_reset": 5}),
     ]
     PRESET_SECTIONS = ("Animation", "Colours", "Background & edges")
+    EXTRA_USER_PRESET_SECTIONS = ("Text",)     # your own presets remember the text too
 
     ATTACK = 0.12        # fraction of a letter's slot spent fading in
     RELEASE = 0.30       # fraction spent fading out (gives repeated letters a visible blink)

@@ -82,12 +82,14 @@ class Control:
     suffix: str = ""
     visible_if: Optional[Callable[[dict], bool]] = None
     help: str = ""
+    advanced: bool = False         # shown only when "Advanced settings" is expanded
 
 
 @dataclass
 class Preset:
     name: str
     values: dict
+    user: bool = False             # saved by the user (can be deleted)
 
     @property
     def swatch(self) -> str:
@@ -113,6 +115,11 @@ class Effect:
     controls: list = []
     presets: list = []
     PRESET_SECTIONS: tuple = ()   # control sections a preset resets to defaults before applying
+    EXTRA_USER_PRESET_SECTIONS: tuple = ()   # also captured when the user saves their own preset
+
+    @classmethod
+    def user_preset_sections(cls):
+        return tuple(cls.PRESET_SECTIONS) + tuple(cls.EXTRA_USER_PRESET_SECTIONS)
 
     def __init__(self, layout: KeyboardLayout):
         self.layout = layout
@@ -120,6 +127,14 @@ class Effect:
     def wants_keys(self, settings: dict) -> bool:
         """Whether the engine should watch for key presses (only while needed)."""
         return False
+
+    def output_gamma(self, settings: dict) -> float:
+        """LEDs look far brighter at half power than eyes expect; >1 restores real darks. Applied by the engine."""
+        return 1.0
+
+    @classmethod
+    def migrate(cls, values: dict):
+        """Upgrade settings saved by older versions (called on load and when applying saved presets)."""
 
     @classmethod
     def defaults(cls) -> dict:
@@ -132,6 +147,7 @@ class Effect:
             if c.section in cls.PRESET_SECTIONS:
                 values[c.key] = c.default
         values.update(preset.values)
+        cls.migrate(values)
 
     def render(self, ctx: RenderContext, settings: dict) -> list:
         """Return one (r, g, b) per LED."""

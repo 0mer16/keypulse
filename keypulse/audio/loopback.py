@@ -5,6 +5,7 @@
     cap.close()
 """
 import ctypes
+import time
 import uuid
 from ctypes import POINTER, byref, c_uint32, c_uint64, c_void_p, wintypes
 
@@ -54,6 +55,19 @@ def _method(obj, index, *argtypes):
     return lambda *args: fn(obj, *args)
 
 
+def _device_id(device):
+    """IMMDevice::GetId - a string that identifies the playback device."""
+    p = ctypes.c_wchar_p()
+    _method(device, 5, POINTER(ctypes.c_wchar_p))(byref(p))
+    s = p.value
+    ole32.CoTaskMemFree(p)
+    return s
+
+
+class DeviceChanged(OSError):
+    """Windows switched its default playback device; the capture must be reopened."""
+
+
 def _release(obj):
     if obj:
         ctypes.WINFUNCTYPE(c_uint32, c_void_p)(
@@ -72,6 +86,8 @@ class Loopback:
         self._device = c_void_p()
         _method(self._enum, 4, ctypes.c_int, ctypes.c_int, POINTER(c_void_p))(
             E_RENDER, E_MULTIMEDIA, byref(self._device))
+        self.device_id = _device_id(self._device)
+        self._next_check = time.monotonic() + 2.0
         self._client = c_void_p()
         _method(self._device, 3, c_void_p, wintypes.DWORD, c_void_p, POINTER(c_void_p))(
             byref(IID_IAudioClient), CLSCTX_ALL, None, byref(self._client))
@@ -110,8 +126,29 @@ class Loopback:
         self._free = _method(self._capture, 4, c_uint32)
         _method(self._client, 10)()  # Start
 
+    def _check_default_device(self):
+        """Every 2 s, make sure we're still capturing the device Windows is playing through."""
+        now = time.monotonic()
+        if now < self._next_check:
+            return
+        self._next_check = now + 2.0
+        dev = c_void_p()
+        try:
+            _method(self._enum, 4, ctypes.c_int, ctypes.c_int, POINTER(c_void_p))(
+                E_RENDER, E_MULTIMEDIA, byref(dev))
+            current = _device_id(dev)
+        except OSError:
+            return            # no playback device at all right now; keep what we have
+        finally:
+            _release(dev)
+        if current != self.device_id:
+            raise DeviceChanged("default playback device changed")
+
     def read(self):
-        """Return all audio captured since the last call as a mono float32 array."""
+        """Return all audio captured since the last call as a mono float32 array.
+
+        Raises OSError (DeviceChanged) when the playback device changes; reopen a new Loopback then."""
+        self._check_default_device()
         chunks = []
         size = c_uint32()
         self._next_size(byref(size))

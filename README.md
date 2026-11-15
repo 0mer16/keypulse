@@ -6,11 +6,12 @@ Lighting effects for the **Mountain Everest 60** keyboard on Windows, starting w
 
 ## Features
 
-- **Music Visualizer**: 15 spectrum bars (bass → treble) with gravity, peak dots, beat flashes on the edge lights, a keyboard pulse on every kick, and sparkles on hi-hats and snares
-  - Colour styles: rainbow, one colour, two colours (bass → treble or bottom → top), three colours (bottom → top)
-  - Presets: Rainbow, Fire, Ocean, Neon, Matrix, VU meter
-  - Edge lights: match the bars, colour cycle, custom colour, or off
-  - Sensitivity, fall speed, brightness, and more
+- **Music Visualizer**: reacts to whatever your PC plays (YouTube, Spotify, games), following your output device
+  - Four patterns: **Bars**, **Mirror** (bass in the middle), **Ripple** (beats send rings across the keys), **Flow** (scrolling waterfall)
+  - Kicks pulse, big hits flash (scaled to how big the hit is), drops send a shockwave across the board, hi-hats sparkle
+  - Colours: rainbow, one, two or three colours, plus 14 presets, and save your own (right-click a ★ preset to delete it)
+  - Advanced settings for edge lights, flash and sparkle colours, sensitivity, fall speed and LED contrast
+- **Type to Light**: spell a word on the keys (spell it out, typewriter, neon sign), or light the next letter each time you press a key
 - Live preview of the keyboard in the app
 - Settings are saved automatically
 - No setup: OpenRGB is bundled and runs hidden in the background, only touching the Everest 60

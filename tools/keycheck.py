@@ -1,4 +1,4 @@
-﻿"""Lights a few keys by their OpenRGB names so you can check them against the physical keyboard.
+"""Lights a few keys by their OpenRGB names so you can check them against the physical keyboard.
 
     python -m tools.keycheck            (keeps the lights on for 5 minutes, Ctrl+C to stop)
 """

@@ -1,4 +1,4 @@
-﻿"""Light one or more keys by OpenRGB name: python -m tools.keyprobe "/=00ff00" "Up Arrow=ffffff" """
+"""Light one or more keys by OpenRGB name: python -m tools.keyprobe "/=00ff00" "Up Arrow=ffffff" """
 import sys, time
 from keypulse.openrgb.client import OpenRGB
 from keypulse.openrgb.runtime import OpenRGBRuntime

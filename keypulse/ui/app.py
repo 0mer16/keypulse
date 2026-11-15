@@ -1,7 +1,7 @@
 """KeyPulse desktop window (customtkinter)."""
 import queue
 import tkinter as tk
-from tkinter import colorchooser
+from tkinter import colorchooser, messagebox
 
 import customtkinter as ctk
 
@@ -22,9 +22,9 @@ STATE_COLORS = {"running": "#2ee59d", "starting": "#ffc94d", "error": "#ff5d6c",
 class KeyboardPreview(tk.Canvas):
     """Mirrors the colours being sent to the keyboard: keys as squares, edge ring as thin strips."""
 
-    KEY = 30
+    KEY = 26
     GAP = 4
-    EDGE = 8
+    EDGE = 7
 
     def __init__(self, master):
         L = KeyboardLayout
@@ -70,32 +70,56 @@ class SettingsPanel(ctk.CTkScrollableFrame):
     def __init__(self, master, on_change):
         super().__init__(master, fg_color=BG, corner_radius=0)
         self.on_change = on_change
-        self.rows = []
+        self.rows = []                 # (control or None for headers, widgets, advanced?)
+        self.show_advanced = False
         self.columnconfigure(1, weight=1)
 
     def build(self, effect_cls, values):
         for child in self.winfo_children():
             child.destroy()
         self.rows, self.values, self.effect_cls = [], values, effect_cls
+        self.adv_btn = None
         row = 0
-        section = None
-        for ctl in effect_cls.controls:
-            if ctl.section != section:
-                section = ctl.section
-                lbl = ctk.CTkLabel(self, text=section.upper(), text_color=MUTED,
-                                   font=ctk.CTkFont(size=11, weight="bold"))
-                lbl.grid(row=row, column=0, columnspan=2, sticky="w", padx=4, pady=(16, 4))
-                self.rows.append((None, [lbl]))
+        main = [c for c in effect_cls.controls if not c.advanced]
+        adv = [c for c in effect_cls.controls if c.advanced]
+        for group, is_adv in ((main, False), (adv, True)):
+            if is_adv and group:
+                self.adv_btn = ctk.CTkButton(self, text="", anchor="w", fg_color="transparent", hover_color=CARD,
+                                             text_color=MUTED, height=32, command=self._toggle_advanced)
+                self.adv_btn.grid(row=row, column=0, columnspan=2, sticky="w", pady=(18, 0))
                 row += 1
-            label = ctk.CTkLabel(self, text=ctl.label, anchor="w")
-            widget = self._widget(ctl, values)
-            label.grid(row=row, column=0, sticky="w", padx=(4, 16), pady=5)
-            widget.grid(row=row, column=1, sticky="ew", padx=4, pady=5)
-            self.rows.append((ctl, [label, widget]))
-            row += 1
+            section = None
+            for ctl in group:
+                if ctl.section != section:
+                    section = ctl.section
+                    lbl = ctk.CTkLabel(self, text=section.upper(), text_color=MUTED,
+                                       font=ctk.CTkFont(size=11, weight="bold"))
+                    lbl.grid(row=row, column=0, columnspan=2, sticky="w", padx=4, pady=(16, 4))
+                    self.rows.append((None, [lbl], is_adv))
+                    row += 1
+                label = ctk.CTkLabel(self, text=ctl.label, anchor="w")
+                widget = self._widget(ctl, values)
+                label.grid(row=row, column=0, sticky="w", padx=(4, 16), pady=5)
+                widget.grid(row=row, column=1, sticky="ew", padx=4, pady=5)
+                self.rows.append((ctl, [label, widget], is_adv))
+                row += 1
+        self.refresh_visibility()
+
+    def _toggle_advanced(self):
+        self.show_advanced = not self.show_advanced
         self.refresh_visibility()
 
     def _widget(self, ctl, values):
+        if ctl.kind == "choice" and not ctl.advanced and len(ctl.options) <= 4:
+            # the main choices (pattern, colours) as one-click segmented buttons
+            labels = [lab for _, lab in ctl.options]
+            to_value = {lab: v for v, lab in ctl.options}
+            seg = ctk.CTkSegmentedButton(self, values=labels, height=36, selected_color=ACCENT,
+                                         selected_hover_color="#6247e0", unselected_color=CARD,
+                                         unselected_hover_color="#2e2e3d", fg_color=CARD,
+                                         command=lambda lab: self._set(ctl.key, to_value[lab]))
+            seg.set(next((lab for v, lab in ctl.options if v == values[ctl.key]), labels[0]))
+            return seg
         if ctl.kind == "choice":
             labels = [lab for _, lab in ctl.options]
             to_value = {lab: v for v, lab in ctl.options}
@@ -160,10 +184,11 @@ class SettingsPanel(ctk.CTkScrollableFrame):
         self.on_change()
 
     def refresh_visibility(self):
-        for ctl, widgets in self.rows:
-            if ctl is None or ctl.visible_if is None:
-                continue
-            show = ctl.visible_if(self.values)
+        if getattr(self, "adv_btn", None) is not None:
+            self.adv_btn.configure(text=("▾  Advanced settings" if self.show_advanced else "▸  Advanced settings"))
+        for ctl, widgets, is_adv in self.rows:
+            show = (self.show_advanced or not is_adv) and (ctl is None or ctl.visible_if is None
+                                                           or ctl.visible_if(self.values))
             for w in widgets:
                 w.grid() if show else w.grid_remove()
 
@@ -261,9 +286,9 @@ class KeyPulseApp(ctk.CTk):
         card.grid(row=3, column=0, sticky="ew", pady=14)
         card.columnconfigure(0, weight=1)
         self.preview = KeyboardPreview(card)
-        self.preview.grid(row=0, column=0, pady=16)
+        self.preview.grid(row=0, column=0, pady=(12, 8))
         self.preset_bar = ctk.CTkFrame(card, fg_color="transparent")
-        self.preset_bar.grid(row=1, column=0, pady=(0, 14))
+        self.preset_bar.grid(row=1, column=0, pady=(0, 10))
 
         self.panel = SettingsPanel(main, on_change=lambda: (self._mark_preset(None), self._changed()))
         self.panel.grid(row=4, column=0, sticky="nsew")
@@ -276,19 +301,55 @@ class KeyPulseApp(ctk.CTk):
             b.configure(fg_color=CARD if k == eid else "transparent")
         self.title_lbl.configure(text=cls.name)
         self.desc_lbl.configure(text=cls.description)
-        for child in self.preset_bar.winfo_children():
-            child.destroy()
-        self.preset_buttons = {}
-        per_row = 7
-        for i, p in enumerate(cls.presets):
-            b = ctk.CTkButton(self.preset_bar, text=p.name, width=90, height=30, fg_color=CARD, hover_color=CARD,
-                              border_width=2, border_color=p.swatch, corner_radius=15,
-                              command=lambda p=p: self.apply_preset(p))
-            b.grid(row=i // per_row, column=i % per_row, padx=3, pady=3)
-            self.preset_buttons[p.name] = b
+        self._build_presets()
         self.panel.build(cls, self.settings.effect(eid))
         self._mark_preset(None)
         self._changed()
+
+    def _build_presets(self, active=None):
+        eid = self.settings.app["effect"]
+        for child in self.preset_bar.winfo_children():
+            child.destroy()
+        self.preset_buttons = {}
+        per_row = 8
+        presets = self.settings.presets_for(eid)
+        for i, p in enumerate(presets):
+            b = ctk.CTkButton(self.preset_bar, text=("★ " if p.user else "") + p.name, width=80, height=26,
+                              fg_color=CARD, hover_color=CARD, border_width=2, border_color=p.swatch,
+                              corner_radius=13, font=ctk.CTkFont(size=12), command=lambda p=p: self.apply_preset(p))
+            b.grid(row=i // per_row, column=i % per_row, padx=2, pady=2)
+            if p.user:
+                b.bind("<Button-3>", lambda e, p=p: self._delete_preset(p))
+            self.preset_buttons[p.name] = b
+        n = len(presets)
+        ctk.CTkButton(self.preset_bar, text="＋ Save", width=80, height=26, fg_color="transparent",
+                      hover_color=CARD, border_width=2, border_color=MUTED, text_color=MUTED, corner_radius=13,
+                      font=ctk.CTkFont(size=12), command=self._save_preset).grid(
+            row=n // per_row, column=n % per_row, padx=2, pady=2)
+        self._mark_preset(active)
+
+    def _save_preset(self):
+        eid = self.settings.app["effect"]
+        dialog = ctk.CTkInputDialog(text="Name your preset:", title="Save preset", button_fg_color=ACCENT,
+                                    button_hover_color="#6247e0")
+        name = (dialog.get_input() or "").strip()[:24]
+        if not name:
+            return
+        builtin = {p.name.lower() for p in EFFECTS[eid].presets}
+        if name.lower() in builtin:
+            messagebox.showinfo(APP_NAME, f'"{name}" is a built-in preset name. Please pick another name.', parent=self)
+            return
+        existing = {p["name"].lower() for p in self.settings.user_presets.get(eid, [])}
+        if name.lower() in existing and not messagebox.askyesno(
+                APP_NAME, f'Replace your preset "{name}" with the current settings?', parent=self):
+            return
+        self.settings.save_user_preset(eid, name)
+        self._build_presets(active=name)
+
+    def _delete_preset(self, preset):
+        if messagebox.askyesno(APP_NAME, f'Delete your preset "{preset.name}"?', parent=self):
+            self.settings.delete_user_preset(self.settings.app["effect"], preset.name)
+            self._build_presets()
 
     def apply_preset(self, preset):
         cls = EFFECTS[self.settings.app["effect"]]
