@@ -121,6 +121,18 @@ class SettingsPanel(ctk.CTkScrollableFrame):
             sw = ctk.CTkSwitch(self, text="", variable=var, progress_color=ACCENT,
                                command=lambda: self._set(ctl.key, var.get()))
             return sw
+        if ctl.kind == "text":
+            frame = ctk.CTkFrame(self, fg_color="transparent")
+            frame.columnconfigure(0, weight=1)
+            var = tk.StringVar(value=values[ctl.key])
+            entry = ctk.CTkEntry(frame, textvariable=var, height=40, font=ctk.CTkFont(size=18, weight="bold"),
+                                 fg_color=CARD, border_color=ACCENT, placeholder_text="Type something…")
+            entry.grid(row=0, column=0, sticky="ew")
+            var.trace_add("write", lambda *_: self._set(ctl.key, var.get()[:60]))
+            if ctl.help:
+                ctk.CTkLabel(frame, text=ctl.help, text_color=MUTED, anchor="w",
+                             font=ctk.CTkFont(size=12)).grid(row=1, column=0, sticky="w", pady=(4, 0))
+            return frame
         if ctl.kind == "slider":
             frame = ctk.CTkFrame(self, fg_color="transparent")
             frame.columnconfigure(0, weight=1)

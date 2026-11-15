@@ -44,9 +44,12 @@ class KeyboardLayout:
     KEY_ROWS = (1, 2, 3, 4, 5)       # top -> bottom
     KEY_COLS = tuple(range(1, 16))   # 15 key columns
 
-    def __init__(self, matrix, led_count):
+    def __init__(self, matrix, led_count, led_names=None):
         self.matrix = matrix
         self.led_count = led_count
+        self.led_names = list(led_names or [])
+        # "Key: A" -> LED index, for effects that light specific keys
+        self.key_leds = {n[5:] if n.startswith("Key: ") else n: i for i, n in enumerate(self.led_names)}
 
         def at(r, c):
             try:
@@ -69,7 +72,7 @@ class KeyboardLayout:
 class Control:
     key: str
     label: str
-    kind: str                      # "choice" | "color" | "slider" | "toggle"
+    kind: str                      # "choice" | "color" | "slider" | "toggle" | "text"
     default: Any
     section: str = "Settings"
     options: list = field(default_factory=list)       # choice: [(value, label)]

@@ -72,7 +72,7 @@ class Engine:
         cap = None
         try:
             kb = client.find("Everest")
-            self.layout = KeyboardLayout(kb.matrix, kb.led_count)
+            self.layout = KeyboardLayout(kb.matrix, kb.led_count, kb.leds)
             client.direct_mode(kb)
             effect_id, effect, features = None, None, None
             self._status("running", f"Running on {kb.name}")
@@ -90,6 +90,9 @@ class Engine:
                 if effect.uses_audio and cap is None:
                     cap = Loopback()
                     features = Features(cap.rate, len(self.layout.KEY_COLS))
+                elif not effect.uses_audio and cap is not None:
+                    cap.close()
+                    cap = None
                 s = self.settings.effect(eid)
 
                 audio = None
