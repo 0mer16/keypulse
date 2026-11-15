@@ -7,6 +7,7 @@ from .audio.features import Features
 from .audio.loopback import Loopback
 from .effects import EFFECTS
 from .effects.base import KeyboardLayout, RenderContext, hex_to_rgb, scale
+from .input.keys import KeyWatcher
 from .openrgb.client import OpenRGB
 from .openrgb.runtime import OpenRGBRuntime
 
@@ -70,6 +71,7 @@ class Engine:
         port = self.runtime.ensure()
         client = OpenRGB(port=port, name="KeyPulse")
         cap = None
+        keys = None
         try:
             kb = client.find("Everest")
             self.layout = KeyboardLayout(kb.matrix, kb.led_count, kb.leds)
@@ -105,7 +107,16 @@ class Engine:
                         cap = None
                         continue
 
-                colors = effect.render(RenderContext(dt=dt, now=time.time(), audio=audio), s)
+                if effect.wants_keys(s):
+                    keys = keys or KeyWatcher()
+                    pressed = keys.drain()
+                else:
+                    if keys:
+                        keys.close()
+                        keys = None
+                    pressed = []
+
+                colors = effect.render(RenderContext(dt=dt, now=time.time(), audio=audio, keys=pressed), s)
                 b = self.settings.app["brightness"] / 100.0
                 if b < 0.999:
                     colors = [scale(c, b) for c in colors]
@@ -129,4 +140,6 @@ class Engine:
         finally:
             if cap:
                 cap.close()
+            if keys:
+                keys.close()
             client.close()

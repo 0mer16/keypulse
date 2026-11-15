@@ -102,6 +102,7 @@ class RenderContext:
     dt: float
     now: float
     audio: Any = None              # audio.features.Frame when the effect uses audio
+    keys: list = field(default_factory=list)   # virtual-key codes pressed this frame (if the effect wants keys)
 
 
 class Effect:
@@ -115,6 +116,10 @@ class Effect:
 
     def __init__(self, layout: KeyboardLayout):
         self.layout = layout
+
+    def wants_keys(self, settings: dict) -> bool:
+        """Whether the engine should watch for key presses (only while needed)."""
+        return False
 
     @classmethod
     def defaults(cls) -> dict:

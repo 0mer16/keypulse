@@ -55,3 +55,37 @@ assert led_for("v", layout.key_leds) == layout.key_leds["B"]
 assert led_for("B", layout.key_leds) == layout.key_leds["V"]
 assert led_for("N", layout.key_leds) == layout.key_leds["N"]
 print("V/B correction: OK")
+
+
+# 7. "On key press": each press lights the next letter
+def run_keys(settings, presses, seconds, fps=60):
+    """presses: times (s) at which a key goes down. Returns lit keys sampled just after each press, and at the end."""
+    eff = T(layout)
+    s = T.defaults() | settings
+    assert eff.wants_keys(s)
+    frames, pending = [], sorted(presses)
+    for f in range(int(seconds * fps)):
+        t = f / fps
+        keys = []
+        while pending and pending[0] <= t:
+            pending.pop(0)
+            keys.append(0x41)
+        cols = eff.render(RenderContext(dt=1 / fps, now=t, keys=keys), s)
+        frames.append({name_of[i]: max(c) / 255 for i, c in enumerate(cols) if i in name_of and max(c) > 40})
+    return frames
+
+
+fps = 60
+presses = [0.5, 1.0, 1.5, 2.0, 2.5, 3.5]       # HELLO, then one more press after the word is done
+fr = run_keys({"text": "HELLO", "style": "keypress", "hold": True, "glow": 0.5, "bg_level": 0,
+               "complete_flash": False, "idle_reset": 0}, presses, 4.0)
+for p in presses:
+    print(f"  after press at {p:.1f}s: {sorted(fr[int(p * fps) + 6])}")
+fr = run_keys({"text": "HELLO", "style": "keypress", "hold": True, "bg_level": 0, "idle_reset": 1.0},
+              [0.2, 0.4], 2.5)
+print("idle reset: lit at 0.5s", sorted(fr[30]), "| lit at 2.0s", sorted(fr[120]) or "nothing (reset)")
+fr = run_keys({"text": "HI", "style": "keypress", "hold": False, "glow": 0.5, "bg_level": 0,
+               "complete_flash": False, "idle_reset": 0}, [0.1], 1.0)
+print("fade mode: H at 0.15s", round(fr[9].get("H", 0), 2), "| at 0.7s", fr[42].get("H", "faded out"))
+fr = run_keys({"text": "HI", "style": "keypress", "hint": True, "bg_level": 0, "idle_reset": 0}, [0.1], 0.5)
+print("hint: before any press, dim keys", sorted(fr[3]), "| after pressing, hint moves to", sorted(fr[20]))

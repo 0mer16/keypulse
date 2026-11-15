@@ -6,7 +6,8 @@ from .keymap import led_for
 
 STYLES = [("spell", "Spell it out (one letter at a time)"),
           ("typewriter", "Typewriter (letters build up the word)"),
-          ("neon", "Neon sign (whole word glows)")]
+          ("neon", "Neon sign (whole word glows)"),
+          ("keypress", "On key press (each press lights the next letter)")]
 COLOR_MODES = [("single", "One colour"), ("two", "Two colours: first → last letter"), ("rainbow", "Rainbow letters")]
 EDGE_MODES = [("match", "Match the letter"), ("custom", "Custom colour"), ("off", "Off")]
 
@@ -24,10 +25,21 @@ class TypeTextEffect(Effect):
                 help="Letters, numbers and symbols on the keyboard. Spaces become short pauses."),
 
         Control("style", "Style", "choice", "spell", "Animation", options=STYLES),
-        Control("speed", "Speed", "slider", 3, "Animation", min=0.5, max=10, step=0.5, suffix=" letters/s"),
-        Control("pause", "Pause before repeating", "slider", 1.0, "Animation", min=0, max=4, step=0.25, suffix=" s"),
+        Control("speed", "Speed", "slider", 3, "Animation", min=0.5, max=10, step=0.5, suffix=" letters/s",
+                visible_if=_style("spell", "typewriter", "neon")),
+        Control("pause", "Pause before repeating", "slider", 1.0, "Animation", min=0, max=4, step=0.25, suffix=" s",
+                visible_if=_style("spell", "typewriter", "neon")),
         Control("trail", "Letter trail", "slider", 30, "Animation", min=0, max=100, step=5, suffix="%",
                 visible_if=_style("spell")),
+        Control("hold", "Keep letters lit until the word is done", "toggle", True, "Animation",
+                visible_if=_style("keypress")),
+        Control("glow", "Glow time", "slider", 1.0, "Animation", min=0.2, max=4, step=0.1, suffix=" s",
+                visible_if=_style("keypress")),
+        Control("complete_flash", "Flash the word when it's complete", "toggle", True, "Animation",
+                visible_if=_style("keypress")),
+        Control("hint", "Hint the next key", "toggle", False, "Animation", visible_if=_style("keypress")),
+        Control("idle_reset", "Start over after not typing for", "slider", 3, "Animation", min=0, max=10,
+                step=0.5, suffix=" s", visible_if=_style("keypress")),
 
         Control("color_mode", "Letter colours", "choice", "single", "Colours", options=COLOR_MODES),
         Control("color1", "Colour 1", "color", "#00e5ff", "Colours",
@@ -56,6 +68,11 @@ class TypeTextEffect(Effect):
                         "color2": "#ffd000", "bg_level": 5, "bg_color": "#3a0a00", "edge_mode": "match"}),
         Preset("Ocean", {"style": "neon", "color_mode": "two", "color1": "#0040ff", "color2": "#00ffd5",
                          "bg_level": 4, "bg_color": "#001a33", "edge_mode": "match"}),
+        Preset("Type along", {"style": "keypress", "hold": True, "complete_flash": True, "color_mode": "rainbow",
+                              "bg_level": 3, "bg_color": "#ffffff", "edge_mode": "match"}),
+        Preset("Typing game", {"style": "keypress", "hold": True, "hint": True, "complete_flash": True,
+                               "color_mode": "two", "color1": "#00e5ff", "color2": "#ff00c8", "bg_level": 0,
+                               "edge_mode": "match", "idle_reset": 5}),
     ]
     PRESET_SECTIONS = ("Animation", "Colours", "Background & edges")
 
@@ -72,6 +89,82 @@ class TypeTextEffect(Effect):
         self.text = text
         self.seq = [led_for(ch, self.layout.key_leds) for ch in text]
         self.t = 0.0
+        self._kp_reset()
+
+    def wants_keys(self, settings):
+        return settings.get("style") == "keypress"
+
+    # ---------- "On key press" state ----------
+    def _kp_reset(self):
+        self.kp_next = 0          # index into the lit letters of the next letter to light
+        self.kp_lit = {}          # token index -> time it was lit
+        self.kp_last = None       # time of the last press
+        self.kp_done = None       # time the word was completed
+        self.kp_flash = 0.0
+
+    POP = 0.15                    # seconds a freshly pressed letter flashes bright
+
+    def _render_keypress(self, s, ctx, light, letter_rgb):
+        now = self.t
+        letters = [i for i, led in enumerate(self.seq) if led is not None]
+        m = len(letters)
+        idle = s["idle_reset"]
+        for _ in ctx.keys:
+            if not m:
+                break
+            idle_out = idle > 0 and self.kp_last is not None and now - self.kp_last > idle
+            if self.kp_next >= m or idle_out:
+                self._kp_reset()
+            i = letters[self.kp_next]
+            self.kp_lit[i] = now
+            self.kp_next += 1
+            self.kp_last = now
+            if self.kp_next == m:
+                self.kp_done = now
+                if s["complete_flash"]:
+                    self.kp_flash = 1.0
+        self.kp_flash *= math.exp(-ctx.dt * 6)
+
+        # everything fades out once you stop typing for the idle time
+        fade_all = 1.0
+        if idle > 0 and self.kp_last is not None and now - self.kp_last > idle:
+            fade_all = max(0.0, 1 - (now - self.kp_last - idle) / 0.5)
+            if fade_all == 0:
+                self._kp_reset()
+                return (0.0, 0.0, 0.0), 0.0
+
+        glow = s["glow"]
+        edge_rgb, edge_v, newest = (0.0, 0.0, 0.0), 0.0, None
+        for i, t_lit in self.kp_lit.items():
+            age = now - t_lit
+            v = min(1.0, age / 0.04)
+            if s["hold"]:
+                if self.kp_done is not None:
+                    after = now - self.kp_done
+                    v *= 1.0 if after < glow else max(0.0, 1 - (after - glow) / 0.6)
+            else:
+                v *= max(0.0, 1 - age / glow) ** 1.3
+            v *= fade_all
+            col = letter_rgb[i]
+            pop = max(0.0, 1 - age / self.POP)
+            if pop > 0:                               # every press visibly flashes, even repeated letters
+                col = mix(col, (255, 255, 255), 0.55 * pop)
+            if self.kp_flash > 0.02:
+                col = mix(col, (255, 255, 255), 0.6 * self.kp_flash)
+                v = max(v, self.kp_flash * fade_all)
+            if v > 0:
+                light(i, v, col)
+            if newest is None or t_lit > self.kp_lit[newest]:
+                newest = i
+        if newest is not None:
+            edge_rgb = letter_rgb[newest]
+            edge_v = max(0.0, 1 - (now - self.kp_lit[newest]) / max(glow, 0.3)) * fade_all
+            edge_v = max(edge_v, self.kp_flash)
+        if s["hint"] and self.kp_next < m:
+            nxt = letters[self.kp_next]
+            pulse = 0.18 + 0.12 * math.sin(now * 5)
+            light(nxt, pulse, letter_rgb[nxt])
+        return edge_rgb, edge_v
 
     def _letter_colors(self, s):
         lit = [i for i, led in enumerate(self.seq) if led is not None]
@@ -123,7 +216,9 @@ class TypeTextEffect(Effect):
                 if led is not None and v > level.get(led, (0, None))[0]:
                     level[led] = (v, col)
 
-            if style == "neon":
+            if style == "keypress":
+                edge_rgb, edge_v = self._render_keypress(s, ctx, light, letter_rgb)
+            elif style == "neon":
                 period = n * step + s["pause"]
                 t = self.t % period
                 sweep = t / step               # a soft highlight travels along the word
