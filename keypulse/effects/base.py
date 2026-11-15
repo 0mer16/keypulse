@@ -86,6 +86,13 @@ class Preset:
     name: str
     values: dict
 
+    @property
+    def swatch(self) -> str:
+        """A representative colour for the preset's button."""
+        if self.values.get("color_mode", "rainbow") == "rainbow":
+            return "#ff3df0"
+        return self.values.get("color2") or self.values.get("color1") or "#ffffff"
+
 
 @dataclass
 class RenderContext:
@@ -101,6 +108,7 @@ class Effect:
     uses_audio = False
     controls: list = []
     presets: list = []
+    PRESET_SECTIONS: tuple = ()   # control sections a preset resets to defaults before applying
 
     def __init__(self, layout: KeyboardLayout):
         self.layout = layout
@@ -108,6 +116,14 @@ class Effect:
     @classmethod
     def defaults(cls) -> dict:
         return {c.key: c.default for c in cls.controls}
+
+    @classmethod
+    def apply_preset(cls, values: dict, preset: "Preset"):
+        """Reset the preset-owned sections to defaults, then apply the preset (Tuning etc. is kept)."""
+        for c in cls.controls:
+            if c.section in cls.PRESET_SECTIONS:
+                values[c.key] = c.default
+        values.update(preset.values)
 
     def render(self, ctx: RenderContext, settings: dict) -> list:
         """Return one (r, g, b) per LED."""

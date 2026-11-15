@@ -64,7 +64,27 @@ class VisualizerEffect(Effect):
                           "edge_color": "#00a82b", "flash_color": "#b6ffb6", "sparkle_color": "#d4ffd4"}),
         Preset("VU meter", {"color_mode": "three_v", "color1": "#00ff3c", "color2": "#ffd000", "color3": "#ff0000",
                             "edge_mode": "match", "flash_color": "#ffffff"}),
+        Preset("Sunset", {"color_mode": "three_v", "color1": "#ff4500", "color2": "#ff2e88", "color3": "#7b2cff",
+                          "edge_mode": "custom", "edge_color": "#ff5e3a", "flash_color": "#ffd1a8",
+                          "sparkle_color": "#ffe0b3"}),
+        Preset("Vaporwave", {"color_mode": "two_h", "color1": "#ff71ce", "color2": "#01cdfe", "edge_mode": "custom",
+                             "edge_color": "#b967ff", "flash_color": "#fffb96", "sparkle_color": "#05ffa1"}),
+        Preset("Ice", {"color_mode": "two_v", "color1": "#0a3cff", "color2": "#e6f7ff", "idle_glow": 10,
+                       "edge_mode": "custom", "edge_color": "#5ad1ff", "flash_color": "#ffffff"}),
+        Preset("Galaxy", {"color_mode": "three_v", "color1": "#1a0b5e", "color2": "#7b2cff", "color3": "#ff4fd8",
+                          "idle_glow": 10, "edge_mode": "cycle", "flash_color": "#ffffff"}),
+        Preset("Cyberpunk", {"color_mode": "two_h", "color1": "#fcee0a", "color2": "#00f0ff", "edge_mode": "custom",
+                             "edge_color": "#ff003c", "flash_color": "#ff003c", "sparkle_color": "#00f0ff"}),
+        Preset("Toxic", {"color_mode": "two_v", "color1": "#00ff2a", "color2": "#c8ff00", "edge_mode": "custom",
+                         "edge_color": "#8a00ff", "flash_color": "#c8ff00", "sparkle_color": "#8a00ff"}),
+        Preset("Party", {"color_mode": "rainbow", "idle_glow": 0, "edge_mode": "cycle", "flash_color": "#ffffff",
+                         "beat_punch": True, "sparkles": True}),
+        Preset("Minimal", {"color_mode": "single", "color1": "#ffffff", "idle_glow": 0, "edge_mode": "off",
+                           "beat_flash": False, "beat_punch": False, "sparkles": False}),
     ]
+
+    # sections a preset owns; anything else (Tuning) is the user's and survives preset changes
+    PRESET_SECTIONS = ("Colours", "Edge lights", "Beats & sparkle")
 
     PEAK_HOLD = 0.35
     PEAK_GRAVITY = 14.0

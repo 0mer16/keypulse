@@ -253,7 +253,7 @@ class KeyPulseApp(ctk.CTk):
         self.preset_bar = ctk.CTkFrame(card, fg_color="transparent")
         self.preset_bar.grid(row=1, column=0, pady=(0, 14))
 
-        self.panel = SettingsPanel(main, on_change=self._changed)
+        self.panel = SettingsPanel(main, on_change=lambda: (self._mark_preset(None), self._changed()))
         self.panel.grid(row=4, column=0, sticky="nsew")
 
     # ---------- behaviour ----------
@@ -266,19 +266,34 @@ class KeyPulseApp(ctk.CTk):
         self.desc_lbl.configure(text=cls.description)
         for child in self.preset_bar.winfo_children():
             child.destroy()
-        if cls.presets:
-            ctk.CTkLabel(self.preset_bar, text="Presets", text_color=MUTED).pack(side="left", padx=(0, 8))
-        for p in cls.presets:
-            ctk.CTkButton(self.preset_bar, text=p.name, width=84, height=28, fg_color=CARD, hover_color=ACCENT,
-                          corner_radius=14, command=lambda p=p: self.apply_preset(p)).pack(side="left", padx=3)
+        self.preset_buttons = {}
+        per_row = 7
+        for i, p in enumerate(cls.presets):
+            b = ctk.CTkButton(self.preset_bar, text=p.name, width=90, height=30, fg_color=CARD, hover_color=CARD,
+                              border_width=2, border_color=p.swatch, corner_radius=15,
+                              command=lambda p=p: self.apply_preset(p))
+            b.grid(row=i // per_row, column=i % per_row, padx=3, pady=3)
+            self.preset_buttons[p.name] = b
         self.panel.build(cls, self.settings.effect(eid))
+        self._mark_preset(None)
         self._changed()
 
     def apply_preset(self, preset):
+        cls = EFFECTS[self.settings.app["effect"]]
         values = self.settings.effect()
-        values.update(preset.values)
-        self.panel.build(EFFECTS[self.settings.app["effect"]], values)
+        cls.apply_preset(values, preset)
+        self.panel.build(cls, values)
+        self._mark_preset(preset.name)
         self._changed()
+
+    def _mark_preset(self, name):
+        """Fill the chosen preset's button with its colour until a setting is changed by hand."""
+        for pname, b in getattr(self, "preset_buttons", {}).items():
+            if pname == name:
+                sw = b.cget("border_color")
+                b.configure(fg_color=sw, text_color=SettingsPanel._text_on(sw))
+            else:
+                b.configure(fg_color=CARD, text_color="#ffffff")
 
     def toggle_running(self):
         if self.engine.running:
